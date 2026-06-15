@@ -1,0 +1,34 @@
+# Segmentation stage — temporally consistent instance masks via SAM3.
+# Text-prompted per object name, then containment + IoU>0.5 deduplication
+# (paper Sec. 3.1, "Instance segmentation").
+
+name: sam3
+
+# Gated repo — accept the license at https://huggingface.co/facebook/sam3 and
+# set HF_TOKEN (via .env) to download.
+model_id: facebook/sam3
+
+# transformers>=5.0 exposes Sam3VideoModel / Sam3VideoProcessor.
+video_model_class: Sam3VideoModel
+video_processor_class: Sam3VideoProcessor
+
+# Max frames per propagate_in_video call.
+max_frames_per_track: 50
+
+# One SAM3 session per text prompt (vs. batching all prompts). Costs more
+# wall-time but avoids cross-prompt instance-id contamination.
+per_prompt_sessions: false
+
+# Cap on text prompts per subscan (avoids mask_iou OOM on runaway-tail
+# subscans). null disables.
+max_prompts: 40
+
+# Deduplication:
+dedup_containment: true    # remove A if A fully inside B
+dedup_iou_threshold: 0.5   # remove A if IoU(A,B) > threshold
+
+# Offload video frames to CPU during propagation (less GPU memory, ~10% slower).
+offload_video_to_cpu: false
+
+# Discard masks with fewer than this many pixels.
+min_mask_pixels: 100

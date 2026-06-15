@@ -1,0 +1,15 @@
+# Output locations. Hydra adds a timestamped run subdir automatically.
+
+root: ${hydra:runtime.cwd}/outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+
+# Per-stage subdirectories (relative to root).
+geometry_dir: geometry
+object_listing_dir: object_listing
+segmentation_dir: segmentation
+fusion_dir: fusion
+correspondence_dir: correspondence
+registration_dir: registration
+eval_dir: evaluation
+
+# Save visualizations (annotated frames, aligned PLYs). Off keeps runs lean.
+save_visualizations: false

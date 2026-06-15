@@ -1,0 +1,62 @@
+# Object-listing stage — VLM object discovery via Qwen3.6-27B (vLLM).
+#
+# The prompt merges the five design choices from the paper (Tab. 2): landmark
+# salience, static-rigid focus, hallucination guard, occlusion recovery, and a
+# room-type scene prior.
+
+name: qwen
+
+model_id: Qwen/Qwen3.6-27B
+vlm_backend: vllm_local   # or "hf" to use HuggingFace transformers (QwenVLWrapper)
+
+vllm:
+  dtype: auto
+  gpu_memory_utilization: 0.85
+  max_model_len: 65536
+  limit_mm_per_prompt_image: 16
+  max_num_seqs: 8
+  tensor_parallel_size: 1
+  enforce_eager: false
+  trust_remote_code: true
+
+prompt: >-
+  Identify all objects present in the video. For blurry frames, provide
+  your best guess. Output at most 20 items as concrete, distinct objects
+  you actually observe. Prioritize medium-to-large landmark-scale objects
+  (furniture, appliances, built-in fixtures) that anchor the scene for
+  relocalization, while still listing smaller distinctive items. Focus on
+  static, rigid objects (furniture, appliances, fixtures, containers);
+  skip non-rigid or dynamic entities (people, hands, pets) and bare
+  structural surfaces (walls, floors, ceilings). Do not invent, speculate,
+  or enumerate category variations (e.g., generic 'toy X' / 'small X'
+  taxonomy expansions); never pad the list to reach the 20-item cap, and
+  prefer fewer high-confidence items over many marginal guesses. Include
+  objects even when only briefly seen, partially visible, occluded, or in
+  poor lighting — when in doubt, include them. First identify the room
+  type (e.g., kitchen, living room, bedroom, office), then include
+  functional objects typical of that room that you can directly see.
+  Return the output as a Python list of strings.
+
+max_batch_size: 8
+
+consolidation_prompt: "\nMerge the lists into a single flat Python list of strings.\n\nRules:\n- Remove exact duplicates.\n- Remove semantic duplicates.\n- If both a generic and a more specific term exist, keep only the more specific one.\n- Do not include synonyms or overlapping items twice.\n- Output only a valid Python list of strings (no extra text, no nested lists, no stringified list).\n            "
+
+ignored_classes:
+  - floor
+  - floors
+  - wall
+  - walls
+  - tile
+  - tiles
+  - window
+  - windows
+  - ceiling
+  - ceilings
+  - mirror
+  - mirrors
+
+max_new_tokens: 2048
+do_sample: false
+
+# Drop room-type pseudo-objects (e.g. "living room" listed as an object).
+drop_room_types: true

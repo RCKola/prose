@@ -1,0 +1,38 @@
+# Aria Digital Twin (ADT) dataset.
+#
+# Preprocess once with preprocessing/adt/preprocess_adt.py (needs
+# projectaria_tools). After that the runtime pipeline only reads the flat
+# PNG / NPY tree below — no projectaria_tools dependency at run time.
+
+name: adt
+
+root_dir: ${oc.env:ADT_ROOT,${hydra:runtime.cwd}/sample_data/adt}
+
+# Single-sequence layout produced by preprocess_adt.py.
+sequence_name: Apartment_release_clean_seq133_M1292
+sequence_dir: ${dataset.root_dir}/${dataset.sequence_name}
+
+# Aria's RGB stream is portrait-mounted; preprocessing rotates every rectified
+# PNG / depth NPY / pose 90° CW into `*_rot/` so all stages see upright frames.
+rectified_dir: ${dataset.sequence_dir}/rectified_rot
+depth_dir:     ${dataset.sequence_dir}/depth_rot
+poses_file:    ${dataset.sequence_dir}/poses_rot.npy
+intrinsics_file: ${dataset.sequence_dir}/intrinsics_rot.npy
+anchors_file: ${dataset.sequence_dir}/anchors_val.json
+
+# Frames are already upright after the rotation pass; the correspondence stage
+# must not rotate them again. Flows in via ${dataset.image_rotation_k}.
+image_rotation_k: 0
+
+# Gravity axis. ADT world frame is +Y up — height bins split along Y.
+up_axis: y
+
+# --- Preprocessing-only metadata (read by preprocess_adt.py) ---
+# Sliding window: 6 frames, stride 5, sampled every 0.5s from the RGB stream.
+window_size: 6
+window_stride: 5
+frame_interval_seconds: 0.5
+rgb_stream_id: "214-1"
+image_width: 512
+image_height: 512
+rectified_focal: 280.0

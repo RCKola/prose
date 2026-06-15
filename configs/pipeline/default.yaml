@@ -1,0 +1,9 @@
+# Runtime precision / attention settings.
+# Defaults target SM>=80 GPUs (A100 / H100 / H200): bf16 + FlashAttention-2.
+# On older cards (e.g. V100) set torch_dtype=float16, attn_implementation=sdpa.
+
+name: default
+
+torch_dtype: bfloat16
+attn_implementation: flash_attention_2
+device_map: auto

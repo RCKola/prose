@@ -1,0 +1,58 @@
+# Registration stage (paper Sec. 3.3) — per-instance descriptor matching +
+# RANSAC, one transform hypothesis per matched pair, select by geometric
+# consensus (inlier ratio over the full cloud).
+#
+# Per-instance correspondence descriptor: {geotransformer, fcgf, fpfh}.
+#   geotransformer  → custom CUDA ext (third_party/GeoTransformer) [default]
+#   fcgf            → MinkowskiEngine + 3DMatch weights
+#   fpfh            → Open3D only (handcrafted, no weights)
+# All three are reported in the paper; switch via registration.corr_extractor=.
+
+name: default
+
+corr_extractor: geotransformer
+
+# Weights. FPFH is handcrafted (no weights); FCGF + GeoTransformer need theirs.
+corr_extractor_checkpoint: ${hydra:runtime.cwd}/weights/fcgf/fcgf_3dmatch.pth
+checkpoint_path: ${hydra:runtime.cwd}/weights/geotransformer/geotransformer-3dmatch.pth.tar
+
+# GeoTransformer input controls.
+max_points_per_pc: 10000
+input_voxel_size: 0.025
+fallback_max_points: 10000
+
+# Correspondence filtering: geometric consistency + one-to-one reduction.
+filter_correspondences: true
+corr_distance_tolerance: 0.15
+corr_min_consistent_neighbors: 2
+
+# Transform-hypothesis verification: build per-pair hypotheses, keep the one
+# whose transformed src cloud best overlaps ref (paper's pose voting).
+verify_transform: true
+verify_radius: 0.1
+verify_min_inlier_ratio: 0.1
+
+# Min points per side for an instance pair to attempt registration.
+min_object_points: 50
+
+# Total point-level correspondence budget across all instance pairs.
+num_p2p_corrs: 20000
+
+# RANSAC (pygcransac; falls back to Umeyama SVD when unavailable).
+ransac_threshold: 0.03
+ransac_min_iters: 1000
+ransac_max_iters: 10000
+ransac_use_sprt: true
+ransac_retry_cap: 8000
+
+# Metric thresholds.
+positive_radius: 0.1
+inlier_ratio_thresh: 0.05
+rmse_thresh: 0.2
+
+# Full-cloud GeoTransformer fallback when Stage-5 gets zero usable instance
+# correspondences (tagged status in per_pair_info).
+use_geotransformer_fallback: true
+
+# Secondary paired-recall metric (expensive O(N^2)); off by default.
+eval_paired_recall: false

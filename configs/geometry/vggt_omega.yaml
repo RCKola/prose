@@ -1,0 +1,35 @@
+# Geometry stage — per-frame depth + camera via VGGT-Omega.
+# https://github.com/facebookresearch/vggt-omega
+#
+# Only invoked when use_gt_pointclouds=false. The checkpoint is gated:
+# download once from https://huggingface.co/facebook/VGGT-Omega and point
+# `checkpoint_path` at the local .pt file (or set $VGGT_OMEGA_CKPT).
+# If the package/checkpoint is missing, the stage falls back to GT clouds.
+
+name: vggt_omega
+
+checkpoint_path: ${oc.env:VGGT_OMEGA_CKPT,${hydra:runtime.cwd}/weights/vggt_omega/vggt_omega_1b_512.pt}
+
+# Preprocessing resolution. Must match the checkpoint (1b-512 → 512).
+image_resolution: 512
+
+# Max frames per inference call. Honoured only when align_to_gt_poses=false;
+# Umeyama alignment needs all frames in one batch.
+max_frames_per_call: 8
+
+# Depth confidence threshold (VGGT-Omega's depth_conf head emits values >= 1).
+conf_threshold: 1.5
+
+# Align predicted poses + depth to GT via Umeyama Sim(3): lands points in the
+# dataset world frame at metric scale. Set false to trust VGGT's own poses.
+align_to_gt_poses: true
+
+# Use VGGT's own predicted poses + intrinsics (no Umeyama, no GT poses). Output
+# cloud is in VGGT's predicted frame at non-metric scale.
+use_predicted_camera: false
+
+# Spatial stride for back-projection (1 = every pixel).
+backproject_stride: 1
+
+# Optional voxel downsample of the final cloud, in metres (null disables).
+voxel_downsample: 0.005

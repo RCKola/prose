@@ -1,0 +1,9 @@
+[submodule "third_party/vggt-omega"]
+	path = third_party/vggt-omega
+	url = https://github.com/facebookresearch/vggt-omega.git
+[submodule "third_party/GeoTransformer"]
+	path = third_party/GeoTransformer
+	url = https://github.com/qinzheng93/GeoTransformer.git
+[submodule "third_party/FCGF"]
+	path = third_party/FCGF
+	url = https://github.com/chrischoy/FCGF.git

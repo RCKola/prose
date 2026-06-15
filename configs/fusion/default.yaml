@@ -1,0 +1,72 @@
+# Fusion stage — per-subscan 3D prior (paper Sec. 3.1, "Per-instance fusion").
+#
+# Back-projects SAM3 masks into 3D, voxelizes at 5 cm, resolves per-frame
+# instance-id switching by per-voxel majority vote, absorbs split instances,
+# and merges near-duplicates — producing the scene-graph nodes (fused point
+# set + PCA oriented bounding box per instance). Pure CPU.
+
+name: default
+
+enabled: true
+
+# Centroid: "mean" (point-count weighted) or "median_of_frame_centroids".
+centroid_method: mean
+
+# Discard instances with fewer fused points than this (flagged unstable).
+min_instance_points: 50
+
+# Centroid drift (m) above which an instance is flagged dynamic.
+dynamic_centroid_var_threshold_m: 0.10
+
+depth_inlier_filter:
+  enabled: false
+  mad_k: 2.0
+  min_points: 10
+
+# Per-voxel instance-id majority-vote relabel (resolves SAM3 id switching).
+voxel_revote:
+  enabled: true
+  voxel_size_m: 0.05
+  level1_min_majority_frac: 0.0
+  absorb_majority_threshold: 0.5    # absorb an instance into another if >= 50% revoted
+
+outlier_frame_filter:
+  enabled: false
+  max_deviation_m: 0.15
+  min_frames: 5
+
+# Scene-wide intra-side dedup + geometry/id fusion.
+dedup:
+  enabled: true
+  gate: voxel_chamfer               # or "centroid_obb" (legacy)
+  voxel_size_m: 0.05
+  voxel_containment_thresh: 0.6
+  chamfer_thresh_m: 0.03
+  chamfer_max_pts: 10000
+  centroid_thresh_m: 0.15
+  obb_size_gate_frac: 0.40
+  require_category_match: false
+  min_points_per_cluster: 0
+
+# Shape descriptor: PCA eigen-ratios (3) concat ESF histogram (n_bins).
+esf_n_bins: 64
+esf_n_samples: 4096
+
+# Scene-graph edges (paper Sec. 3.1: "edges connecting instances with nearby
+# centroids"). Connects each instance node to its k nearest neighbours within a
+# radius and labels each edge with a coarse spatial relation (above/below/near)
+# from the gravity axis. Stored in PriorArtifact.edges.
+scene_graph:
+  enabled: true
+  k_neighbors: 5            # connect each instance to its k nearest neighbours
+  radius_m: 1.0             # ... whose centroid is within this distance
+  up_axis: y               # gravity axis (must match the dataset's up axis)
+  vertical_relation_threshold_m: 0.25
+
+# Optional floor-plane scale correction (only meaningful for predicted clouds).
+floor_plane_scale:
+  enabled: false
+  distance_threshold: 0.05
+  ransac_n: 3
+  num_iterations: 1000
+  nominal_scene_height_m: 2.5

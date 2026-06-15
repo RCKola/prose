@@ -1,0 +1,48 @@
+# PROSE — top-level entry config.
+#
+# Usage:
+#   python scripts/run_pipeline.py                       # GT clouds + ADT
+#   python scripts/run_pipeline.py use_gt_pointclouds=false   # VGGT-Omega clouds
+#   python scripts/run_pipeline.py registration.corr_extractor=fcgf
+#   python scripts/run_pipeline.py pairs=all
+
+defaults:
+  - pipeline: default
+  - dataset: adt
+  - geometry: vggt_omega
+  - object_listing: qwen
+  - segmentation: sam3
+  - fusion: default
+  - correspondence: height_bins
+  - registration: default
+  - output: default
+  - _self_
+
+# Global
+seed: 42
+device: cuda
+num_workers: 4
+
+# Which pairs to run:
+#   - "all": every subscan pair in the anchors JSON
+#   - "first_n": first `max_pairs` pairs (smoke testing)
+#   - list[str]: explicit pair IDs "<src>__<ref>"
+pairs: first_n
+max_pairs: 1
+
+# Stages to skip (resume / debug). Names: geometry, object_listing,
+# segmentation, fusion, correspondence, registration.
+skip_stages: []
+
+# Use ground-truth point clouds (the GT-cloud benchmark). When false, the
+# geometry stage predicts clouds from RGB with VGGT-Omega (sensor-free).
+use_gt_pointclouds: true
+
+# Evaluate against GT after registration.
+run_evaluation: true
+
+# Correspondence GT (SAM3↔SAM3 mutual-NN IoU under the GT transform).
+eval:
+  gt_iou_method: voxel     # symmetric Jaccard over a voxel grid, bounded [0,1]
+  gt_voxel_size: 0.05
+  gt_iou_min: 0.25         # keep mutual-NN pairs with IoU above this as GT

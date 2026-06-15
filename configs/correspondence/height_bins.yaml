@@ -1,0 +1,87 @@
+# Correspondence stage (paper Sec. 3.2) — height-binned cross-scan instance
+# matching with shared-namespace Set-of-Marks crop panels, a per-bin VLM query,
+# a cross-bin stitching pass for instances that never shared a bin, and a
+# two-pass same/different double-check that verifies every proposed match.
+
+name: height_bins
+
+# -- VLM backend --
+vlm_backend: vllm_local
+model_id: Qwen/Qwen3.6-27B
+
+vllm:
+  dtype: auto
+  gpu_memory_utilization: 0.85
+  max_model_len: 16384
+  limit_mm_per_prompt_image: 256
+  max_num_seqs: 8
+  tensor_parallel_size: 1
+  enforce_eager: true
+  trust_remote_code: true
+
+vlm_max_new_tokens: 2000
+temperature: null
+
+# -- Height binning + per-bin panels --
+blocking:
+  enabled: true
+
+  n_bins: 5            # K = 5 equal-count quantile height bands (paper)
+  overlap_frac: 0.2    # 20% overlap between adjacent bins
+  bin_mode: quantile
+
+  coalesce_pop_threshold: 12
+  coalesce_radius_frac: 0.5
+  coalesce_obb_extent_frac: 0.40
+
+  bin_visuals: crops_context
+  context_frame_enabled: true
+
+  crops_enabled: true
+  crops_pad_frac: 0.4
+  crops_min_side_px: 256
+  crops_outline_thickness: 2
+  crops_panel_px: 384
+
+  draw_circles: false
+  mosaic_font_scale: 0.9
+  mosaic_mask_outline_thickness: 2
+
+  enable_thinking_mode: false
+  thinking_max_new_tokens: 3000
+
+  per_bin_frame_selection:
+    enabled: true
+    k_per_bin: 6
+    top_n_per_iid: 8
+    min_pixel_area: 200
+
+  # Geometric-consistency resolver is bypassed: the double-check is the sole
+  # false-positive filter (paper).
+  geo_correction:
+    bypass: true
+    top_k: 0
+    lam: 1.0
+    tau: 0.45
+    k: 8
+
+  # Final pass: re-query instances that never co-occurred in a bin.
+  cross_bin_stitch: true
+  cross_bin_max_per_side: 15
+
+# -- Two-pass same/different double-check --
+do_double_check: true
+dc_negation_pass: true
+dc_max_new_tokens: 64
+dc_max_frames_per_side: 3
+
+# -- Visual knobs --
+use_bev: false
+subpanel_longside_px: 512
+bev_resolution_px: 1024
+bev_point_size_px: 6
+marker_namespace: shared_distinct
+
+# Inherited from the dataset (upright frames, gravity axis).
+image_rotation_k: ${dataset.image_rotation_k}
+up_axis: ${dataset.up_axis}
