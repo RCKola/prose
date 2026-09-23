@@ -1,4 +1,4 @@
-"""Stage 4 orchestrator (Step 1 skeleton).
+"""Correspondence pipeline orchestrator.
 
 The canonical per-pair pipeline is:
 
@@ -12,13 +12,10 @@ The canonical per-pair pipeline is:
     G. result = resolver.resolve(vlm_result, ctx)
        for p in postprocess: result = p.apply(result, ctx)
 
-The blocking meta-composer is an escape hatch: when ``blocking_enabled``
-is set on the pipeline, ``run_pair`` delegates to ``run_blocking_pipeline``
-which owns phases C–F per bin and returns an aggregated result. This is
-the Step-1 pragmatic shortcut; Step 5 will formalise it as a decorator.
-
-Step 1 fills in only the ADT-baseline preset's path. Other phases are
-empty modules that later steps will populate.
+When ``blocking_enabled`` is set, ``run_pair`` delegates to
+``run_blocking_pipeline`` which owns phases C–F per height bin and
+returns an aggregated result. This is the path the default ADT config
+takes (``blocking.enabled: true``).
 """
 from __future__ import annotations
 
@@ -40,14 +37,13 @@ from .vlm.invoker import VLMInvoker
 
 
 @dataclass
-class Stage4Pipeline:
+class CorrespondencePipeline:
     """Composition of phase objects + a VLM invoker.
 
-    The pipeline driver (``stages.stage4_correspondence`` dispatcher) is
-    responsible for assembling the ``PairContext`` from Stage 1/3/3.5
-    caches and calling ``run_pair`` once per pair. It also owns the
-    Hydra-side construction of the phase objects (typically via
-    ``stage4.registry.build``).
+    The pipeline driver (``prose.pipeline.Pipeline``) is responsible for
+    assembling the ``PairContext`` from the Stage 1/3/4 caches (geometry,
+    segmentation, fusion) and calling ``run_pair`` once per pair. It also
+    owns the Hydra-side construction of the phase objects.
     """
 
     filter: Any                          # InstanceFilter
@@ -61,13 +57,13 @@ class Stage4Pipeline:
 
     # When True, run_pair delegates to blocking_runner (phases C-F per bin).
     blocking_enabled: bool = False
-    blocking_runner: Optional[Callable[["Stage4Pipeline", PairContext], CorrespondenceResult]] = None
+    blocking_runner: Optional[Callable[["CorrespondencePipeline", PairContext], CorrespondenceResult]] = None
 
     # Optional post-DC geo correction resolver.
     geo_after_dc_resolver: Optional[Any] = None
 
     # CLI-only: when set, saves mosaic image + prompt + raw VLM text per pair.
-    # Not in any YAML default; pass via stage4_correspondence.save_vlm_samples_to=<dir>.
+    # Not in any YAML default; pass via correspondence.save_vlm_samples_to=<dir>.
     vlm_sample_dir: Optional[Path] = None
 
     def run_pair(self, ctx: PairContext) -> CorrespondenceArtifact:

@@ -159,7 +159,7 @@ class ADTDataset(BaseDataset):
 
             points_world.append(world.astype(np.float32))
             # Store POSITIONAL frame index (0..N-1 within the subscan) — this
-            # matches Stage 3 mask keys and Stage 4 frame_paths dict.
+            # matches Stage 3 mask keys and Stage 5 frame_paths dict.
             for u, v in zip(us_f[valid], vs_f[valid]):
                 point_to_pixels.append([
                     {"frame_id": int(i), "pixel_u": int(u), "pixel_v": int(v)}

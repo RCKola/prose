@@ -1,4 +1,4 @@
-"""Stage 5: GeoTransformer per-instance registration + RANSAC (paper §3.6).
+"""Stage 6: GeoTransformer per-instance registration + RANSAC (paper §3.6).
 
 For each (src_id, ref_id) correspondence, extract the sub-point-cloud belonging
 to that instance in each subscan (via 2D-3D correspondences and SAM3 masks),
@@ -204,7 +204,7 @@ class _GeoTransformerRunner:
         return {"src": src_corr, "ref": ref_corr, "scores": scores}
 
 
-def _ransac_rigid(src_corr: np.ndarray, ref_corr: np.ndarray, cfg_stage5) -> Optional[np.ndarray]:
+def _ransac_rigid(src_corr: np.ndarray, ref_corr: np.ndarray, cfg_registration) -> Optional[np.ndarray]:
     """Estimate a 4x4 rigid transform from point-to-point correspondences.
 
     Verbatim from `sgaligner/src/engine/registration_evaluator.py:175-194`.
@@ -226,16 +226,16 @@ def _ransac_rigid(src_corr: np.ndarray, ref_corr: np.ndarray, cfg_stage5) -> Opt
         est_transform, _ = pygcransac.findRigidTransform(
             np.ascontiguousarray(transformed_corrs_ransac),
             probabilities=[],
-            threshold=float(cfg_stage5.ransac_threshold),
+            threshold=float(cfg_registration.ransac_threshold),
             neighborhood_size=4,
             sampler=1,
-            min_iters=int(cfg_stage5.ransac_min_iters),
-            max_iters=int(cfg_stage5.ransac_max_iters),
+            min_iters=int(cfg_registration.ransac_min_iters),
+            max_iters=int(cfg_registration.ransac_max_iters),
             spatial_coherence_weight=0.0,
-            use_space_partitioning=not bool(cfg_stage5.ransac_use_sprt),
+            use_space_partitioning=not bool(cfg_registration.ransac_use_sprt),
             neighborhood=0,
             conf=0.999,
-            use_sprt=bool(cfg_stage5.ransac_use_sprt),
+            use_sprt=bool(cfg_registration.ransac_use_sprt),
         )
     except Exception as e:  # noqa: BLE001
         log.warning("RANSAC failed: %s", e)
@@ -300,7 +300,7 @@ def _retry_ransac_subsets(
     all_src_corr: List[np.ndarray],
     all_ref_corr: List[np.ndarray],
     all_scores: List[np.ndarray],
-    cfg_stage5,
+    cfg_registration,
     pair_id: str,
 ) -> Optional[np.ndarray]:
     """Recover a transform after the pooled RANSAC failed.
@@ -321,28 +321,28 @@ def _retry_ransac_subsets(
     scores = np.concatenate(all_scores, axis=0) if have_scores else None
 
     # --- Attempt A: score/count cap ---
-    cap = int(getattr(cfg_stage5, "ransac_retry_cap", 8000))
+    cap = int(getattr(cfg_registration, "ransac_retry_cap", 8000))
     if src_corr.shape[0] > cap:
         if scores is not None:
             sel = np.argsort(-scores)[:cap]
         else:
             sel = np.random.default_rng(0).choice(src_corr.shape[0], cap, replace=False)
-        est_T = _ransac_rigid(src_corr[sel], ref_corr[sel], cfg_stage5)
+        est_T = _ransac_rigid(src_corr[sel], ref_corr[sel], cfg_registration)
         if est_T is not None:
             log.info(
-                "Stage 5 [%s]: retry RANSAC on top-%d/%d corrs → SUCCESS",
+                "Stage 6 [%s]: retry RANSAC on top-%d/%d corrs → SUCCESS",
                 pair_id, cap, src_corr.shape[0],
             )
             return est_T
 
     # --- Attempt B: per-instance RANSAC + inlier voting ---
-    threshold = float(cfg_stage5.ransac_threshold)
+    threshold = float(cfg_registration.ransac_threshold)
     best_T: Optional[np.ndarray] = None
     best_inliers = -1
     for sc, rc in zip(all_src_corr, all_ref_corr):
         if sc.shape[0] < 3:
             continue
-        cand = _ransac_rigid(sc, rc, cfg_stage5)
+        cand = _ransac_rigid(sc, rc, cfg_registration)
         if cand is None:
             continue
         n_in = _count_inliers(src_corr, ref_corr, cand, threshold)
@@ -350,12 +350,12 @@ def _retry_ransac_subsets(
             best_T, best_inliers = cand, n_in
     if best_T is not None:
         log.info(
-            "Stage 5 [%s]: retry per-instance RANSAC → SUCCESS "
+            "Stage 6 [%s]: retry per-instance RANSAC → SUCCESS "
             "(%d/%d pooled inliers)",
             pair_id, best_inliers, src_corr.shape[0],
         )
     else:
-        log.warning("Stage 5 [%s]: RANSAC retry exhausted — no transform", pair_id)
+        log.warning("Stage 6 [%s]: RANSAC retry exhausted — no transform", pair_id)
     return best_T
 
 
@@ -365,13 +365,13 @@ def _full_cloud_fallback(
     runner: "_GeoTransformerRunner",
     src_points: np.ndarray,
     ref_points: np.ndarray,
-    cfg_stage5,
+    cfg_registration,
     per_pair_info: List[dict],
     reason: str,
 ) -> RegistrationArtifact:
     """Run GeoTransformer on the FULL src/ref clouds (no instance masking).
 
-    Triggered when Stage 4 returns no correspondences, or when every
+    Triggered when Stage 5 returns no correspondences, or when every
     instance pair failed during the per-instance loop. `reason` is recorded
     in per_pair_info under the synthetic `(-1, -1)` instance pair so
     downstream eval can tell a fallback registration apart from a per-
@@ -387,8 +387,8 @@ def _full_cloud_fallback(
     # scales with the room's spatial extent, which downsampling does not
     # shrink. Voxel-downsample to `fallback_max_points` uniform points so the
     # forward fits in GPU memory WITHOUT cropping the spatial extent.
-    fb_cap = int(getattr(cfg_stage5, "fallback_max_points", 10000))
-    fb_voxel = float(getattr(cfg_stage5, "input_voxel_size", 0.025))
+    fb_cap = int(getattr(cfg_registration, "fallback_max_points", 10000))
+    fb_voxel = float(getattr(cfg_registration, "input_voxel_size", 0.025))
     src_fb = voxel_downsample(src_points, fb_voxel, fb_cap)
     ref_fb = voxel_downsample(ref_points, fb_voxel, fb_cap)
     t_geo = time.perf_counter()
@@ -398,7 +398,7 @@ def _full_cloud_fallback(
         info["status"] = "fallback_geotransformer_failed"
         info["geo_time_s"] = round(t_geo, 2)
         per_pair_info.append(info)
-        log.warning("Stage 5 [%s] FALLBACK (%s): GeoTransformer failed (%.1fs)", pair_id, reason, t_geo)
+        log.warning("Stage 6 [%s] FALLBACK (%s): GeoTransformer failed (%.1fs)", pair_id, reason, t_geo)
         return RegistrationArtifact(
             pair_id=pair_id, est_transform=None, n_correspondences=0,
             per_pair_info=per_pair_info,
@@ -409,7 +409,7 @@ def _full_cloud_fallback(
     sc = res["src"]
     rc = res["ref"]
     scores = res.get("scores")
-    cap = int(cfg_stage5.num_p2p_corrs)
+    cap = int(cfg_registration.num_p2p_corrs)
     if sc.shape[0] > cap:
         if scores is not None:
             sel = np.argsort(-scores)[:cap]
@@ -423,10 +423,10 @@ def _full_cloud_fallback(
     per_pair_info.append(info)
 
     t_ransac = time.perf_counter()
-    est_T = _ransac_rigid(sc, rc, cfg_stage5)
+    est_T = _ransac_rigid(sc, rc, cfg_registration)
     t_ransac = time.perf_counter() - t_ransac
     log.info(
-        "Stage 5 [%s] FALLBACK (%s): %d p2p corrs → %s  [geo: %.1fs, ransac: %.1fs]",
+        "Stage 6 [%s] FALLBACK (%s): %d p2p corrs → %s  [geo: %.1fs, ransac: %.1fs]",
         pair_id, reason, sc.shape[0], "SUCCESS" if est_T is not None else "FAIL",
         t_geo, t_ransac,
     )
@@ -469,62 +469,60 @@ def _allocate_per_pair_caps(
     return [int(c) for c in caps]
 
 
-_CORR_EXTRACTOR_CONTAINERS = {
-    "geotransformer": "prose-build.toml (NGC PyTorch + GeoTransformer baked in)",
-    "fpfh": "fcgf.toml (Open3D 0.18 — handcrafted, no weights needed)",
-    "fcgf": "fcgf.toml (MinkowskiEngine 0.5.4 + ResUNetBN2C 3DMatch weights)",
+_CORR_EXTRACTOR_REQUIREMENTS = {
+    "geotransformer": "GeoTransformer C++ extension (bash scripts/setup_geotransformer.sh)",
+    "fpfh": "Open3D (pip install -e \".[viz]\") — handcrafted, no weights needed",
+    "fcgf": "MinkowskiEngine + ResUNetBN2C 3DMatch weights at weights/fcgf/fcgf_3dmatch.pth",
 }
 
 
-def _make_corr_runner(cfg_stage5):
+def _make_corr_runner(cfg_registration):
     """Dispatch the per-instance correspondence extractor.
 
-    `cfg_stage5.corr_extractor` ∈ {"fcgf" (default), "fpfh", "geotransformer"}
+    `cfg_registration.corr_extractor` ∈ {"fcgf" (default), "fpfh", "geotransformer"}
     selects the backend; everything else (voxel input, _filter_corrs,
     verify_transform, _retry_ransac_subsets, full-cloud fallback) is shared.
 
-    Each backend requires a different container — see the table below and
-    `docs/eval/stage5_method.md` for the canonical mapping:
-        geotransformer  → prose-build.toml
-        fpfh            → fcgf.toml  (Open3D)
-        fcgf            → fcgf.toml  (MinkowskiEngine + 3DMatch ckpt)
+    Each backend has its own extra dependency — see
+    ``_CORR_EXTRACTOR_REQUIREMENTS`` for what each one needs.
     """
-    name = str(getattr(cfg_stage5, "corr_extractor", "fcgf")).lower()
-    voxel = float(getattr(cfg_stage5, "input_voxel_size", 0.025))
-    max_pts = int(cfg_stage5.max_points_per_pc)
-    if name not in _CORR_EXTRACTOR_CONTAINERS:
+    name = str(getattr(cfg_registration, "corr_extractor", "fcgf")).lower()
+    voxel = float(getattr(cfg_registration, "input_voxel_size", 0.025))
+    max_pts = int(cfg_registration.max_points_per_pc)
+    if name not in _CORR_EXTRACTOR_REQUIREMENTS:
         raise ValueError(
             f"Unknown corr_extractor: {name!r}. "
-            f"Choose one of: {sorted(_CORR_EXTRACTOR_CONTAINERS)}."
+            f"Choose one of: {sorted(_CORR_EXTRACTOR_REQUIREMENTS)}."
         )
 
-    container_hint = _CORR_EXTRACTOR_CONTAINERS[name]
+    requirement_hint = _CORR_EXTRACTOR_REQUIREMENTS[name]
     try:
         if name == "geotransformer":
             return _GeoTransformerRunner(
-                Path(cfg_stage5.checkpoint_path), max_pts, voxel_size=voxel,
+                Path(cfg_registration.checkpoint_path), max_pts, voxel_size=voxel,
             )
         if name == "fpfh":
             from ..models.fpfh_extractor import _FPFHRunner
             return _FPFHRunner(max_points=max_pts, voxel_size=voxel)
         if name == "fcgf":
             from ..models.fcgf_extractor import _FCGFRunner
-            ckpt = Path(getattr(cfg_stage5, "corr_extractor_checkpoint",
+            ckpt = Path(getattr(cfg_registration, "corr_extractor_checkpoint",
                                 "weights/fcgf/fcgf_3dmatch.pth"))
             if not ckpt.is_absolute():
                 ckpt = Path.cwd() / ckpt
             return _FCGFRunner(checkpoint_path=ckpt, max_points=max_pts, voxel_size=voxel)
     except ImportError as e:
         raise ImportError(
-            f"corr_extractor={name!r} requires the {container_hint} container. "
+            f"corr_extractor={name!r} requires: {requirement_hint}. "
             f"Original import error: {e}"
         ) from e
+    raise ValueError(f"Unhandled corr_extractor: {name!r}")
 
 
 def _free_runner(runner: Optional["_GeoTransformerRunner"]) -> None:
     """Release a GeoTransformer runner's model + CUDA cache.
 
-    Stage 5 builds one runner per pair; without an explicit release the GPU
+    Stage 6 builds one runner per pair; without an explicit release the GPU
     memory from each pair's model accumulates across the run and the
     full-cloud fallback OOMs on later pairs (observed: 69 GB -> 94 GB in use
     across 36 ADT pairs).
@@ -566,7 +564,7 @@ def _nn_inlier_ratio(src_t: np.ndarray, ref: np.ndarray, radius: float) -> float
     return n_in / float(src_t.shape[0])
 
 
-def _select_by_cloud_overlap(candidates, src_points, ref_points, cfg_stage5):
+def _select_by_cloud_overlap(candidates, src_points, ref_points, cfg_registration):
     """Score each candidate transform by full-cloud overlap; return the best.
 
     Applies T to a subsample of the src cloud and measures the fraction of
@@ -577,7 +575,7 @@ def _select_by_cloud_overlap(candidates, src_points, ref_points, cfg_stage5):
     """
     if not candidates:
         return None, 0.0, "none"
-    radius = float(getattr(cfg_stage5, "verify_radius", 0.1))
+    radius = float(getattr(cfg_registration, "verify_radius", 0.1))
     rng = np.random.default_rng(0)
 
     def _sub(p, n):
@@ -606,7 +604,7 @@ def _filter_correspondences(
     ref_points: np.ndarray,
     src_inst: np.ndarray,
     ref_inst: np.ndarray,
-    cfg_stage5,
+    cfg_registration,
 ) -> Tuple[List[Tuple[int, int]], Optional[List[float]]]:
     """Geometric-consistency + one-to-one filter on instance correspondences.
 
@@ -621,8 +619,8 @@ def _filter_correspondences(
       * one-to-one — each src/ref instance keeps a single partner; conflicts
         are resolved by geometric-consistency vote count.
     """
-    tol = float(getattr(cfg_stage5, "corr_distance_tolerance", 0.15))
-    min_consistent = int(getattr(cfg_stage5, "corr_min_consistent_neighbors", 2))
+    tol = float(getattr(cfg_registration, "corr_distance_tolerance", 0.15))
+    min_consistent = int(getattr(cfg_registration, "corr_min_consistent_neighbors", 2))
 
     def _centroid(points, inst, iid):
         m = points[inst == iid]
@@ -689,13 +687,13 @@ def run_registration(
     src_masks: Dict[int, Dict[int, np.ndarray]],
     ref_masks: Dict[int, Dict[int, np.ndarray]],
     correspondences: List[Tuple[int, int]],
-    cfg_stage5,
+    cfg_registration,
     correspondence_weights: Optional[List[float]] = None,
 ) -> RegistrationArtifact:
     """Per-instance GeoTransformer + final RANSAC fusion.
 
-    When `cfg_stage5.use_geotransformer_fallback=true` (default), Stage 5
-    falls back to a full-cloud GeoTransformer + RANSAC run if Stage 4
+    When `cfg_registration.use_geotransformer_fallback=true` (default), Stage 6
+    falls back to a full-cloud GeoTransformer + RANSAC run if Stage 5
     produced no correspondences or every instance pair failed. The
     fallback is tagged in `per_pair_info[*].fallback_reason`.
 
@@ -706,19 +704,19 @@ def run_registration(
     so high-confidence Stage-4 pairs dominate the RANSAC inlier pool.
     Weight is echoed into `per_pair_info[i]["weight"]`.
     """
-    use_fallback = bool(getattr(cfg_stage5, "use_geotransformer_fallback", True))
+    use_fallback = bool(getattr(cfg_registration, "use_geotransformer_fallback", True))
 
     if not correspondences:
         if not use_fallback:
-            log.warning("Stage 5 [%s]: no correspondences — skipping", pair_id)
+            log.warning("Stage 6 [%s]: no correspondences — skipping", pair_id)
             return RegistrationArtifact(pair_id=pair_id, est_transform=None, n_correspondences=0, per_pair_info=[])
-        log.warning("Stage 5 [%s]: no correspondences — falling back to full-cloud GeoTransformer", pair_id)
-        runner = _make_corr_runner(cfg_stage5)
+        log.warning("Stage 6 [%s]: no correspondences — falling back to full-cloud GeoTransformer", pair_id)
+        runner = _make_corr_runner(cfg_registration)
         try:
             return _full_cloud_fallback(
                 pair_id=pair_id, runner=runner,
                 src_points=src_points, ref_points=ref_points,
-                cfg_stage5=cfg_stage5, per_pair_info=[],
+                cfg_registration=cfg_registration, per_pair_info=[],
                 reason="no_correspondences",
             )
         finally:
@@ -730,30 +728,30 @@ def run_registration(
     # Geometric-consistency + one-to-one filter on the Stage-4 correspondences
     # (drops wrong instance pairs that would otherwise hijack RANSAC, and the
     # many-to-one matches from indistinguishable repeated objects).
-    if bool(getattr(cfg_stage5, "filter_correspondences", False)):
+    if bool(getattr(cfg_registration, "filter_correspondences", False)):
         n_before = len(correspondences)
         correspondences, correspondence_weights = _filter_correspondences(
             correspondences, correspondence_weights,
-            src_points, ref_points, src_inst, ref_inst, cfg_stage5,
+            src_points, ref_points, src_inst, ref_inst, cfg_registration,
         )
-        log.info("Stage 5 [%s]: correspondence filter %d -> %d (geom-consistency + 1:1)",
+        log.info("Stage 6 [%s]: correspondence filter %d -> %d (geom-consistency + 1:1)",
                  pair_id, n_before, len(correspondences))
         if not correspondences:
-            log.warning("Stage 5 [%s]: all correspondences filtered out", pair_id)
+            log.warning("Stage 6 [%s]: all correspondences filtered out", pair_id)
             return RegistrationArtifact(
                 pair_id=pair_id, est_transform=None, n_correspondences=0,
                 per_pair_info=[],
             )
 
-    runner = _make_corr_runner(cfg_stage5)
+    runner = _make_corr_runner(cfg_registration)
 
     all_src_corr: List[np.ndarray] = []
     all_ref_corr: List[np.ndarray] = []
     all_scores: List[np.ndarray] = []
     per_pair_info: List[dict] = []
 
-    min_pts = int(cfg_stage5.min_object_points)
-    num_p2p_corrs = int(cfg_stage5.num_p2p_corrs)
+    min_pts = int(cfg_registration.min_object_points)
+    num_p2p_corrs = int(cfg_registration.num_p2p_corrs)
     per_pair_caps = _allocate_per_pair_caps(
         num_p2p_corrs=num_p2p_corrs,
         n_pairs=len(correspondences),
@@ -826,14 +824,14 @@ def run_registration(
                 ref_corr_points=np.zeros((0, 3), dtype=np.float32),
             )
         log.warning(
-            "Stage 5 [%s]: all %d instance pairs failed — falling back to full-cloud GeoTransformer",
+            "Stage 6 [%s]: all %d instance pairs failed — falling back to full-cloud GeoTransformer",
             pair_id, len(correspondences),
         )
         try:
             return _full_cloud_fallback(
                 pair_id=pair_id, runner=runner,
                 src_points=src_points, ref_points=ref_points,
-                cfg_stage5=cfg_stage5, per_pair_info=per_pair_info,
+                cfg_registration=cfg_registration, per_pair_info=per_pair_info,
                 reason="instance_pairs_failed",
             )
         finally:
@@ -853,31 +851,31 @@ def run_registration(
     # drown out in the single pooled fit, and rejects transforms that align
     # nothing.
     t_ransac = time.perf_counter()
-    if bool(getattr(cfg_stage5, "verify_transform", False)):
+    if bool(getattr(cfg_registration, "verify_transform", False)):
         candidates: List[Tuple[str, np.ndarray]] = []
-        pooled_T = _ransac_rigid(src_corr, ref_corr, cfg_stage5)
+        pooled_T = _ransac_rigid(src_corr, ref_corr, cfg_registration)
         if pooled_T is not None:
             candidates.append(("pooled", pooled_T))
         for i, (s, r) in enumerate(zip(all_src_corr, all_ref_corr)):
             if s.shape[0] >= 3:
-                ti = _ransac_rigid(s, r, cfg_stage5)
+                ti = _ransac_rigid(s, r, cfg_registration)
                 if ti is not None:
                     candidates.append((f"inst{i}", ti))
         est_T, best_score, best_tag = _select_by_cloud_overlap(
-            candidates, src_points, ref_points, cfg_stage5)
-        min_score = float(getattr(cfg_stage5, "verify_min_inlier_ratio", 0.1))
+            candidates, src_points, ref_points, cfg_registration)
+        min_score = float(getattr(cfg_registration, "verify_min_inlier_ratio", 0.1))
         if est_T is not None and best_score < min_score:
-            log.info("Stage 5 [%s]: best hypothesis (%s) cloud-overlap %.3f < %.2f — rejected",
+            log.info("Stage 6 [%s]: best hypothesis (%s) cloud-overlap %.3f < %.2f — rejected",
                      pair_id, best_tag, best_score, min_score)
             est_T = None
         else:
-            log.info("Stage 5 [%s]: %d transform hypotheses, selected=%s cloud-overlap=%.3f",
+            log.info("Stage 6 [%s]: %d transform hypotheses, selected=%s cloud-overlap=%.3f",
                      pair_id, len(candidates), best_tag, best_score)
     else:
-        est_T = _ransac_rigid(src_corr, ref_corr, cfg_stage5)
+        est_T = _ransac_rigid(src_corr, ref_corr, cfg_registration)
     t_ransac = time.perf_counter() - t_ransac
     log.info(
-        "Stage 5 [%s]: %d p2p corrs (n_nodes=%d, per_node_caps=%s) → %s  "
+        "Stage 6 [%s]: %d p2p corrs (n_nodes=%d, per_node_caps=%s) → %s  "
         "[geo: %.1fs/%d calls, ransac: %.1fs]",
         pair_id, src_corr.shape[0], len(correspondences),
         list(per_pair_caps) if len(per_pair_caps) <= 8 else f"<{len(per_pair_caps)} entries>",
@@ -887,7 +885,7 @@ def run_registration(
     if est_T is None:
         t_retry = time.perf_counter()
         est_T = _retry_ransac_subsets(
-            all_src_corr, all_ref_corr, all_scores, cfg_stage5, pair_id
+            all_src_corr, all_ref_corr, all_scores, cfg_registration, pair_id
         )
         t_retry = time.perf_counter() - t_retry
         if est_T is not None:
@@ -898,7 +896,7 @@ def run_registration(
                 "retry_time_s": round(t_retry, 2),
             })
         else:
-            log.info("Stage 5 [%s]: RANSAC retry took %.1fs", pair_id, t_retry)
+            log.info("Stage 6 [%s]: RANSAC retry took %.1fs", pair_id, t_retry)
     return RegistrationArtifact(
         pair_id=pair_id,
         est_transform=est_T,

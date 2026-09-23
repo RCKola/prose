@@ -3,8 +3,7 @@
 VGGT-Omega is a feed-forward depth + camera estimator from Meta AI. Source:
     https://github.com/facebookresearch/vggt-omega
 
-This wrapper mirrors the shape of `DA3Wrapper` so Stage 1 can swap between
-DA3 and VGGT-Omega via a Hydra config group (`stage1_depth=vggt_omega`).
+Selected by the Stage 1 (geometry) Hydra config group (`geometry=vggt_omega`).
 
 The HuggingFace model (`facebook/VGGT-Omega`) is gated, so checkpoints must
 be downloaded once and pointed at via `checkpoint_path`. Live HF resolution
@@ -65,8 +64,8 @@ class VGGTOmegaWrapper:
         except ImportError as e:  # pragma: no cover
             raise ImportError(
                 "VGGT-Omega requires the `vggt_omega` package. Install with:\n"
-                "  git submodule update --init prose/third_party/vggt-omega\n"
-                "  # and ensure third_party/vggt-omega is on PYTHONPATH (EDF or shell)\n"
+                "  git submodule update --init third_party/vggt-omega\n"
+                "  # and ensure third_party/vggt-omega is on PYTHONPATH\n"
                 f"Original import error: {e}"
             )
 
@@ -77,7 +76,7 @@ class VGGTOmegaWrapper:
             raise FileNotFoundError(
                 f"VGGT-Omega checkpoint not found: {ckpt}. Download once from "
                 "https://huggingface.co/facebook/VGGT-Omega (gated) and point "
-                "stage1_depth.checkpoint_path at the local .pt file."
+                "geometry.checkpoint_path at the local .pt file."
             )
 
         self.device = torch.device(device if torch.cuda.is_available() else "cpu")

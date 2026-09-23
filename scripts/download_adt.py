@@ -2,12 +2,12 @@
 """Download ADT sequences directly from the signed-URL JSON.
 
 The official `adt_benchmark_dataset_downloader` CLI (shipped by projectaria_tools)
-is not available on Python 3.13 — so we parse the JSON manifest ourselves.
+is not installable in the main pipeline env — so we parse the JSON manifest ourselves.
 
 Usage:
     python scripts/download_adt.py \\
         --urls-json /path/to/ADT_download_urls.json \\
-        --output /data1/nahyuk.lee/adt \\
+        --output sample_data/adt \\
         --sequence Apartment_release_clean_seq133_M1292
 
     # Download everything (warning: >2 TB total):

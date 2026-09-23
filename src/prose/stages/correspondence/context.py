@@ -1,7 +1,7 @@
-"""Per-pair data containers passed between Stage 4 phases.
+"""Per-pair data containers passed between Stage 5 phases.
 
 Phases operate on these typed structures, not on raw cache dicts. The
-pipeline driver is the only place that reads Stage 1/3/3.5 from disk;
+pipeline driver is the only place that reads Stage 1/3/4 from disk;
 everything downstream sees a ``PairContext``.
 """
 from __future__ import annotations
@@ -65,7 +65,7 @@ class CorrespondenceResult:
 
 @dataclass
 class PairContext:
-    """Everything ``Stage4Pipeline.run_pair`` needs."""
+    """Everything ``CorrespondencePipeline.run_pair`` needs."""
     pair_id: str
     src: InstanceSet
     ref: InstanceSet

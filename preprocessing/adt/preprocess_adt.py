@@ -3,16 +3,16 @@
 
 This script is intended to run in a dedicated Python 3.11 conda env that has
 `projectaria_tools` installed (projectaria_tools does not publish wheels for
-Python 3.13, which the main pipeline uses).
+Python 3.10+, which the main pipeline uses).
 
     # setup (once):
     conda create -n prose_adt python=3.11 -y
     conda run -n prose_adt pip install projectaria_tools opencv-python
 
     # run (each sequence):
-    conda run -n prose_adt python scripts/preprocess_adt.py \\
-        --sequence-dir /data1/nahyuk.lee/etc/adt/Apartment_release_clean_seq133_M1292 \\
-        --output /data1/nahyuk.lee/etc/adt_preprocessed \\
+    conda run -n prose_adt python preprocessing/adt/preprocess_adt.py \\
+        --sequence-dir sample_data/adt/Apartment_release_clean_seq133_M1292 \\
+        --output sample_data/adt_preprocessed \\
         --window-size 6 --stride 5 --frame-interval 0.5
 
 The ADT download ships artifacts under per-artifact subdirectories
@@ -52,7 +52,7 @@ def _require_projectaria():
     except ImportError as e:
         raise SystemExit(
             "projectaria_tools is required. This script should run in a "
-            "Python 3.11 env (main prose env uses 3.13 which has no wheel).\n"
+            "Python 3.11 env (main prose env uses 3.10+ which may lack a wheel).\n"
             "    conda create -n prose_adt python=3.11 -y\n"
             "    conda run -n prose_adt pip install projectaria_tools opencv-python\n"
             f"Original: {e}"
@@ -149,7 +149,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--sequence-dir", type=Path, required=True,
                         help="Path to the raw downloaded sequence "
-                             "(e.g. /data1/.../Apartment_release_clean_seq133_M1292).")
+                             "(e.g. sample_data/adt/Apartment_release_clean_seq133_M1292).")
     parser.add_argument("--output", type=Path, required=True,
                         help="Root output dir. Files land under <output>/<seq_name>/.")
     parser.add_argument("--window-size", type=int, default=6)

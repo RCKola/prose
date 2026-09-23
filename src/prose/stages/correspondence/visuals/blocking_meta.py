@@ -1,7 +1,7 @@
 """Blocking meta-composer: per-bin loop that owns phases C–F.
 
 Replaces a clean per-phase chain because blocking touches every phase
-in a way that doesn't fit the canonical skeleton — see the Step-1 plan.
+in a way that doesn't fit the canonical skeleton.
 
 Pure-function pieces (bin schedule, partition, active-bin enumeration,
 intra-bin coalesce) are self-contained copies of the legacy v2 logic.
@@ -502,7 +502,7 @@ def _abs_ids(paths: Dict[int, Path]) -> List[int]:
 def run_blocking_pipeline(pipeline, ctx: PairContext) -> CorrespondenceResult:
     """Per-pair blocking runner.
 
-    ``pipeline`` is the ``Stage4Pipeline``; this function reads
+    ``pipeline`` is the ``CorrespondencePipeline``; this function reads
     ``pipeline.prompt`` / ``parser`` / ``vlm`` / ``resolver`` and
     the ``BlockingConfig`` attached as ``pipeline.blocking_cfg``.
     """

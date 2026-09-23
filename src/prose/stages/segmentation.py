@@ -31,7 +31,7 @@ class SegmentationArtifact:
     # Per-(frame, iid) SAM3 predicted-IoU signal; sparse, missing keys allowed.
     per_frame_iou: Dict[int, Dict[int, float]] = field(default_factory=dict)
     # Per-instance originating text prompt — used as a cheap class label by
-    # the mosaic-matcher Stage 4 backend.
+    # the mosaic-matcher Stage 5 backend.
     instance_to_prompt: Dict[int, str] = field(default_factory=dict)
 
     def save(self, out_dir: Path) -> Path:
@@ -80,7 +80,7 @@ def run_segmentation(
     subscan_id: str,
     frame_paths: Sequence[Path],
     text_prompts: Sequence[str],
-    cfg_stage3,
+    cfg_segmentation,
 ) -> SegmentationArtifact:
     """Run SAM3 per object name, merge IDs, deduplicate per frame."""
     frames = _load_frames_as_rgb(frame_paths)
@@ -89,9 +89,9 @@ def run_segmentation(
     # the stage-2 VLM emits 100+ items (e.g. InternVL-14B-V1.2 wood-stuffing
     # tail: "wooden trim, wooden corner, wooden detail, ..."). p99 of the val
     # set is 38 prompts; only 6/984 exceed 50 and those triggered 42 GiB
-    # allocations in mask_iou. Cap is configurable via cfg_stage3.max_prompts;
+    # allocations in mask_iou. Cap is configurable via cfg_segmentation.max_prompts;
     # null/missing keeps all prompts (legacy behavior).
-    max_prompts = getattr(cfg_stage3, "max_prompts", None)
+    max_prompts = getattr(cfg_segmentation, "max_prompts", None)
     if max_prompts is not None and len(text_prompts) > int(max_prompts):
         log.warning(
             "Stage 3 [%s]: truncating prompts %d → %d to avoid SAM3 OOM",
@@ -102,13 +102,13 @@ def run_segmentation(
     raw_masks = wrapper.segment_video_with_text_prompts(
         frames,
         text_prompts,
-        max_frame_num_to_track=int(cfg_stage3.max_frames_per_track),
-        per_prompt=bool(getattr(cfg_stage3, "per_prompt_sessions", False)),
+        max_frame_num_to_track=int(cfg_segmentation.max_frames_per_track),
+        per_prompt=bool(getattr(cfg_segmentation, "per_prompt_sessions", False)),
     )
     extras = getattr(wrapper, "last_extras", None)
 
     # Discard tiny masks.
-    min_px = int(cfg_stage3.min_mask_pixels)
+    min_px = int(cfg_segmentation.min_mask_pixels)
     filtered: Dict[int, Dict[int, np.ndarray]] = {}
     for fidx, inst in raw_masks.items():
         kept = {iid: m for iid, m in inst.items() if m.sum() >= min_px}
@@ -117,8 +117,8 @@ def run_segmentation(
 
     deduped = dedup_masks_across_frames(
         filtered,
-        containment=bool(cfg_stage3.dedup_containment),
-        iou_threshold=float(cfg_stage3.dedup_iou_threshold),
+        containment=bool(cfg_segmentation.dedup_containment),
+        iou_threshold=float(cfg_segmentation.dedup_iou_threshold),
     )
 
     instance_ids = instance_id_set(deduped)

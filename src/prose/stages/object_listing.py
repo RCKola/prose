@@ -75,18 +75,18 @@ def run_object_listing(
     *,
     subscan_id: str,
     frame_paths: Sequence,
-    cfg_stage2,
+    cfg_object_listing,
 ) -> ObjectListArtifact:
     """Discover objects over the subscan's frames.
 
-    Frames are processed in batches of `cfg_stage2.max_batch_size`.
+    Frames are processed in batches of `cfg_object_listing.max_batch_size`.
     If the subscan has more frames than the batch limit, a consolidation call
     is used to merge partial lists (as in the paper).
     """
     frame_paths = list(frame_paths)
-    max_bs = int(cfg_stage2.max_batch_size)
-    max_new = int(cfg_stage2.max_new_tokens)
-    do_sample = bool(cfg_stage2.do_sample)
+    max_bs = int(cfg_object_listing.max_batch_size)
+    max_new = int(cfg_object_listing.max_new_tokens)
+    do_sample = bool(cfg_object_listing.do_sample)
 
     raw_batches: List[List[str]] = []
 
@@ -95,7 +95,7 @@ def run_object_listing(
         log.info("Stage 2 [%s]: frames %d-%d/%d", subscan_id, start, start + len(batch), len(frame_paths))
         text = wrapper.chat_with_images(
             batch,
-            cfg_stage2.prompt,
+            cfg_object_listing.prompt,
             max_new_tokens=max_new,
             do_sample=do_sample,
         )
@@ -110,7 +110,7 @@ def run_object_listing(
         # Consolidation step — feed the list-of-lists to the VLM via text only.
         log.info("Stage 2 [%s]: consolidating %d batches", subscan_id, len(raw_batches))
         merged_prompt = (
-            cfg_stage2.consolidation_prompt
+            cfg_object_listing.consolidation_prompt
             + "\n\nInput lists:\n"
             + "\n".join(repr(b) for b in raw_batches)
         )
@@ -123,10 +123,10 @@ def run_object_listing(
         merged = parse_vlm_list_output(text)
         merged = [str(x) for x in merged]
 
-    ignored = list(cfg_stage2.ignored_classes)
+    ignored = list(cfg_object_listing.ignored_classes)
     final = _filter_background(merged, ignored)
 
-    if bool(getattr(cfg_stage2, "drop_room_types", False)):
+    if bool(getattr(cfg_object_listing, "drop_room_types", False)):
         before = len(final)
         final = _drop_room_types(final)
         if len(final) < before:

@@ -13,6 +13,7 @@
 <sup>1</sup> [ETH Zurich](https://ethz.ch/en.html) &ensp; <sup>2</sup> [VGG, University of Oxford](https://www.robots.ox.ac.uk/~vgg/) &ensp; <sup>3</sup> [ETH AI Center](https://ai.ethz.ch/)<br>
 \* equal contribution &ensp; † equal advising
 
+[![CoRL 2026](https://img.shields.io/badge/CoRL_2026-Accepted-green)](https://www.corl.org/)
 [![Project Page](https://img.shields.io/badge/Project_Page-PROSE-blue)](https://rckola.github.io/prose/)
 [![Video](https://img.shields.io/badge/Video-YouTube-red?logo=youtube)](https://www.youtube.com/watch?v=Hf1oWjFr45M)
 
@@ -29,6 +30,7 @@
 - [Overview](#overview)
 - [Getting Started](#getting-started)
   - [Setup](#setup)
+    - [FCGF backend](#fcgf-backend)
   - [Foundation-Model Weights](#foundation-model-weights)
 - [Usage](#usage)
   - [Data Preparation](#data-preparation)
@@ -37,6 +39,7 @@
 - [Advanced](#advanced)
   - [Configurations](#configurations)
   - [FAQ](#faq)
+  - [TODO](#todo)
 - [Acknowledgments](#acknowledgments)
 - [License](#license)
 
@@ -72,7 +75,7 @@ The pipeline runs in six stages — four per-subscan (scene parsing) and two per
 Clone with submodules (VGGT-Ω, GeoTransformer, FCGF):
 
 ```bash
-git clone --recursive https://github.com/<org>/prose.git
+git clone --recursive https://github.com/RCKola/prose.git
 cd prose
 ```
 
@@ -90,14 +93,29 @@ pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
 pip install -e .
 ```
 
-PROSE was developed on a single **H200** GPU. Heavy models are loaded one at a time, so a 32 GB card is workable, but Qwen3.6-27B is the binding constraint — use [vLLM](#configurations) (`pip install -e ".[vllm]"`) for the object-listing and correspondence stages.
+PROSE was developed on a single **H200** GPU. Heavy models are loaded one at a time, so a 32 GB card is workable, but Qwen3.6-27B is the binding constraint — use [vLLM](#configurations) for the object-listing and correspondence stages.
+
+> [!IMPORTANT]
+> vLLM hard-pins `torch`, `torchvision` and `torchaudio`, so it **replaces** any
+> PyTorch installed before it. If you want vLLM, skip the `--index-url` step above
+> and install it in a single resolve instead — vLLM then chooses the torch build:
+>
+> ```bash
+> pip install -e ".[vllm]"
+> ```
+>
+> To keep your own torch build instead, skip vLLM and run the two VLM stages
+> through plain `transformers` — slower, but no version constraint:
+>
+> ```bash
+> python scripts/run_pipeline.py \
+>     object_listing.vlm_backend=hf correspondence.vlm_backend=hf
+> ```
 
 Optional extras:
 
 ```bash
-pip install -e ".[vllm]"     # fast Qwen3.6 inference (recommended)
-pip install -e ".[viz]"      # Open3D — required for the FPFH backend + PLY viz
-pip install -e ".[ransac]"   # pygcransac (falls back to Umeyama SVD if absent)
+pip install -e ".[viz]"      # Open3D — required for the fpfh backend + PLY viz
 ```
 
 Build the GeoTransformer C++ extension and fetch its 3DMatch weights (only needed for the default registration backend):
@@ -105,7 +123,58 @@ Build the GeoTransformer C++ extension and fetch its 3DMatch weights (only neede
 ```bash
 bash scripts/setup_geotransformer.sh
 export PYTHONPATH="$(pwd)/third_party/GeoTransformer:$PYTHONPATH"
+export LD_LIBRARY_PATH="$(python -c 'import torch, os; print(os.path.dirname(torch.__file__)+"/lib")'):$LD_LIBRARY_PATH"
 ```
+
+The other two registration backends are set up separately: `fpfh` needs only
+Open3D (the `[viz]` extra above), and `fcgf` needs MinkowskiEngine plus its
+3DMatch checkpoint.
+
+#### FCGF backend
+
+<details>
+<summary>MinkowskiEngine setup, CPU-only build script, and the WarpConvNet route</summary>
+
+The FCGF descriptor runs on [MinkowskiEngine](https://github.com/NVIDIA/MinkowskiEngine).
+MinkowskiEngine installs cleanly on the stack FCGF targets — **CUDA 11.x–12.x**,
+PyTorch 1.6–2.x — where upstream's one-liner is all you need:
+
+```bash
+pip install git+https://github.com/NVIDIA/MinkowskiEngine.git
+```
+
+Then fetch the 3DMatch checkpoint (ResUNetBN2C, normalized feature, 2.5 cm
+voxel, 32-dim) to the path the config expects:
+
+```bash
+mkdir -p weights/fcgf
+curl -fsSL -o weights/fcgf/fcgf_3dmatch.pth \
+    https://huggingface.co/chrischoy/FCGF/resolve/main/2019-08-19_06-17-41.pth
+```
+
+> [!NOTE]
+> The URL in FCGF's pre-2026 README (`node1.chrischoy.org`) is dead; upstream
+> rehosted the checkpoints on HuggingFace.
+
+`scripts/setup_fcgf.sh` automates both steps. It builds MinkowskiEngine
+**CPU-only** — it does not build the CUDA extension — and works around the
+issues a 2021-era package hits on a current toolchain (explicit `--blas` to
+bypass `numpy.distutils`, the Python 3.10 `collections` ABC moves, and the
+`future_fstrings` shim FCGF's own sources need).
+
+For a **CUDA build**, follow the upstream instructions directly —
+[MinkowskiEngine](https://github.com/NVIDIA/MinkowskiEngine) and
+[FCGF](https://github.com/chrischoy/FCGF).
+
+**WarpConvNet.** Upstream FCGF has since [moved to
+WarpConvNet](https://github.com/NVlabs/WarpConvNet), which ships prebuilt wheels
+(no compilation) and now marks the MinkowskiEngine paths legacy. PROSE's
+`models/fcgf_extractor.py` targets MinkowskiEngine, since that is what the
+reported numbers were produced with. Porting it to WarpConvNet is possible — the
+weights convert with upstream's `wcn/convert_me_to_wcn.py` — but is **untested
+here**.
+
+</details>
 
 Finally, copy the secrets template and set your HuggingFace token:
 
@@ -126,10 +195,10 @@ PROSE is **training-free**, so there are no PROSE checkpoints to release. It com
 | **SAM 3** | segmentation | [facebook/sam3](https://huggingface.co/facebook/sam3) | gated; accept license, then auto-downloaded via `HF_TOKEN` |
 | **Qwen3.6-27B** | listing + correspondence | [Qwen/Qwen3.6-27B](https://huggingface.co/Qwen/Qwen3.6-27B) | auto-downloaded on first run |
 | GeoTransformer | registration | [qinzheng93/GeoTransformer](https://github.com/qinzheng93/GeoTransformer) (3DMatch) | fetched by `setup_geotransformer.sh` |
-| FCGF | registration | [chrischoy/FCGF](https://github.com/chrischoy/FCGF) (3DMatch) | needs MinkowskiEngine; place weights at `weights/fcgf/fcgf_3dmatch.pth` |
+| FCGF | registration | [chrischoy/FCGF](https://github.com/chrischoy/FCGF) (3DMatch) | needs MinkowskiEngine — see [FCGF backend](#fcgf-backend) |
 | FPFH | registration | Open3D (handcrafted) | no weights |
 
-The Qwen/SAM3 weights are fetched lazily by HuggingFace on first use; `python scripts/download_checkpoints.py` only fetches the GeoTransformer asset.
+The Qwen/SAM3 weights are fetched lazily by HuggingFace on first use, so there is nothing to pre-download; `scripts/setup_geotransformer.sh` fetches the one asset that is not lazily resolved (the GeoTransformer 3DMatch checkpoint).
 
 
 ## Usage
@@ -144,14 +213,20 @@ python scripts/download_adt.py --urls-json <ADT_download_urls.json> \
     --output sample_data/adt --sequence Apartment_release_clean_seq133_M1292
 
 # 2. Preprocess to the flat RGB/depth/pose tree the pipeline reads.
-#    projectaria_tools has no Python 3.13 wheel, so run this in a 3.11 env:
+#    projectaria_tools wheel coverage lags new Python releases, so use a 3.11 env:
 conda create -n prose_adt python=3.11 -y
 conda run -n prose_adt pip install projectaria_tools opencv-python
 conda run -n prose_adt python preprocessing/adt/preprocess_adt.py \
-    --sequence-dir sample_data/adt/Apartment_release_clean_seq133_M1292
+    --sequence-dir sample_data/adt/Apartment_release_clean_seq133_M1292 \
+    --output sample_data/adt_preprocessed
+
+# 3. Rotate frames upright (Aria's RGB sensor is portrait-mounted).
+#    This produces rectified_rot/, depth_rot/, poses_rot.npy, intrinsics_rot.npy.
+python preprocessing/adt/rotate_adt_artifacts.py \
+    --seq-dir sample_data/adt_preprocessed/Apartment_release_clean_seq133_M1292
 ```
 
-Preprocessing samples frames every 0.5 s, rectifies RGB/depth, undistorts and rotates them upright (`*_rot/`), and writes the sliding-window subscan pairs (`window=6`, `stride=5`) to `anchors_val.json`. The runtime pipeline then reads only this flat tree — no `projectaria_tools` dependency at run time.
+Preprocessing samples frames every 0.5 s, rectifies RGB/depth, and undistorts them. The rotation step then rotates all frames 90° CW into `*_rot/` directories (Aria's temple-mounted sensor produces sideways frames). It also writes the sliding-window subscan pairs (`window=6`, `stride=5`) to `anchors_val.json`. The runtime pipeline reads only this flat tree — no `projectaria_tools` dependency at run time.
 
 ### Running the Pipeline
 
@@ -185,6 +260,8 @@ Swap the registration descriptor (all three are reported in the paper):
 ```bash
 python scripts/run_pipeline.py registration.corr_extractor=fcgf   # or fpfh / geotransformer
 ```
+
+Each backend has its own prerequisites — see [Setup](#setup).
 
 
 ## Advanced
@@ -235,10 +312,29 @@ python scripts/run_pipeline.py pipeline.torch_dtype=float16 pipeline.attn_implem
 ### FAQ
 
 > [!NOTE]
-> Please use [GitHub Issues](https://github.com/<org>/prose/issues) for questions.
+> Please use [GitHub Issues](https://github.com/RCKola/prose/issues) for questions.
 
 > [!TIP]
 > If the VGGT-Ω package or checkpoint is missing, the geometry stage logs a warning and falls back to GT point clouds — handy for testing the rest of the pipeline before setting up the gated checkpoint.
+
+### TODO
+
+- [ ] Scene-graph extraction — renderable 3D spatial map
+- [ ] Port the FCGF backend to WarpConvNet — drops the MinkowskiEngine build ([FCGF backend](#fcgf-backend))
+
+
+## Citation
+
+If you find this work useful, please cite:
+
+```bibtex
+@inproceedings{chen2026prose,
+  title     = {{PROSE}: Training-Free Egocentric Scene Registration with Vision-Language Models},
+  author    = {Chen, Zhiang and Lee, Nahyuk and Sun, Boyang and Kwon, Taein and Pollefeys, Marc and Bauer, Zuria and Hong, Sunghwan},
+  booktitle = {Conference on Robot Learning (CoRL)},
+  year      = {2026},
+}
+```
 
 
 ## Acknowledgments

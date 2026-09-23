@@ -96,7 +96,7 @@ def build_point_to_instance(
     insertion-order iteration, a small instance could steal 3D points
     from a larger overlapping instance just because its mask was added
     to the per-frame dict first — caused 7 instances in v8 to land at
-    exactly 0 points and 29 below the 50-point Stage 5 threshold.
+    exactly 0 points and 29 below the 50-point Stage 6 threshold.
 
     Points whose reprojection lands on no mask → iid = -1.
     """

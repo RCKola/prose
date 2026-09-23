@@ -1,12 +1,8 @@
 """Per-instance fusion of 3D points across frames using SAM3 masks.
 
-These primitives were originally written for the GoM stage-4 backend
-(`utils/gom/spatial_graph.py`) and are lifted here so that the new Stage 3.5
-prior and the GoM backend share a single source of truth.
-
-`spatial_graph.py` re-exports the same public names; existing callers
-(`stage4_correspondence_gom.py`, anything importing from `gom.spatial_graph`)
-keep working unchanged.
+Shared primitives backing the Stage 4 (fusion) scene graph: per-instance
+point aggregation, intra-side dedup, oriented bounding boxes, and k-NN
+proximity edges.
 
 All operations are pure numpy. No torch, no I/O.
 """
@@ -439,7 +435,7 @@ def instance_persistence(
 
 
 # ---------------------------------------------------------------------------
-# New for Stage 3.5: per-frame fractional visibility + bbox-diag normalization
+# New for Stage 4: per-frame fractional visibility + bbox-diag normalization
 # ---------------------------------------------------------------------------
 
 def per_frame_visibility(
@@ -622,7 +618,7 @@ def voxel_revote_iids(
 ) -> Tuple[Dict[int, Dict[int, np.ndarray]], Dict[int, int]]:
     """Per-voxel majority-vote relabel of (frame, iid) per-point assignments.
 
-    The idea: each Stage 3.5 3D point currently carries the iid of its birth
+    The idea: each Stage 4 3D point currently carries the iid of its birth
     frame's mask. When two iids both claim a region (e.g. SAM3 re-detected
     the same cushion as a new iid mid-video), the per-point assignment is
     arbitrary. Voxel-vote relabels every point inside a voxel to the

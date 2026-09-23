@@ -236,7 +236,7 @@ def compute_all_metrics(
 
 
 # ---------------------------------------------------------------------------
-# Stage 4 instance correspondence metrics — semantic eval against anchor GT.
+# Stage 5 instance correspondence metrics — semantic eval against anchor GT.
 # ---------------------------------------------------------------------------
 
 def _make_pixel_rescaler(stage1_data: dict):
@@ -704,8 +704,7 @@ def compute_voxel_iou(
 # * "voxel"        — symmetric voxel-Jaccard (recommended; bounded [0,1]).
 # * "legacy_loose" — bug-compatible with the original port (search_radius=0.2,
 #                    min_iou=0.2). Asymmetric, can exceed 1.0. Preserved so
-#                    historical numbers remain reproducible during the
-#                    audit window.
+#                    historical numbers remain reproducible.
 # * "legacy_sgreg" — bug-compatible with SG-Reg's published defaults
 #                    (search_radius=0.1, min_iou=0.5). Still pathological,
 #                    but the strict params suppress most over-1 outliers.
@@ -741,8 +740,8 @@ def build_sam3_gt_pairs(
       most over-1 outliers but do not cure the asymmetry.
 
     Ported from SG-Reg's ``generate_gt_association.find_association``
-    (lines 144-216). The ``voxel`` method is our replacement; see
-    ``docs/eval/stage4/gt_metric_audit.md`` for the full justification.
+    (lines 144-216). The ``voxel`` method is our replacement — the legacy
+    formulas are kept only for reproducing previously published numbers.
     """
     if iou_method not in IOU_METHODS:
         raise ValueError(f"iou_method must be one of {IOU_METHODS}, got {iou_method!r}")

@@ -46,7 +46,7 @@ log = get_logger(__name__)
 
 @dataclass
 class PriorArtifact:
-    """Per-subscan output of Stage 3.5."""
+    """Per-subscan output of Stage 4."""
     subscan_id: str
     instance_ids: List[int] = field(default_factory=list)
     instance_points: Dict[int, np.ndarray] = field(default_factory=dict)        # iid -> (Ki, 3) f32
@@ -57,9 +57,9 @@ class PriorArtifact:
     bbox_extents: Dict[int, np.ndarray] = field(default_factory=dict)          # iid -> (3,) f32 OBB edge lengths
     # raw Stage 3 iid -> canonical (post-dedup) iid. Identity when dedup off
     # or no clusters formed. Downstream stages apply this to per_frame_masks /
-    # per_frame_iou / instance_to_prompt before consuming Stage 3.5 instances.
+    # per_frame_iou / instance_to_prompt before consuming Stage 4 instances.
     iid_alias: Dict[int, int] = field(default_factory=dict)
-    # Audit fields for Stage 3.5 intra-side dedup. Both empty when dedup off
+    # Audit fields for Stage 4 intra-side dedup. Both empty when dedup off
     # or no clusters formed.
     # dedup_summary keys: "n_raw_iids", "n_canonical_iids", "n_merged_clusters",
     # "n_iids_merged_away" (n_raw - n_canonical). All ints.
@@ -152,7 +152,7 @@ def _floor_plane_scale(
     try:
         import open3d as o3d  # noqa: WPS433 (lazy import is intentional)
     except ImportError:
-        log.warning("Stage 3.5: open3d not available; skipping floor-plane scale")
+        log.warning("Stage 4: open3d not available; skipping floor-plane scale")
         return None
     if points.shape[0] < max(ransac_n, 100):
         return None
@@ -196,7 +196,7 @@ def run_fusion(
         categories: optional iid -> SAM3 prompt-label map (for debugging /
             future category-aware affinity). May be None or empty.
         cfg: a Hydra cfg node with the keys defined in
-            `configs/stage3p5_prior/default.yaml`.
+            `configs/fusion/default.yaml`.
 
     Empty inputs produce an empty `PriorArtifact` with `instance_ids=[]` —
     safe for downstream `.get(...)` and cache hits.
@@ -205,7 +205,7 @@ def run_fusion(
 
     # Empty inputs — emit a structurally valid empty artifact.
     if points_xyz is None or points_xyz.shape[0] == 0 or not per_frame_masks:
-        log.info("Stage 3.5 [%s]: empty inputs; writing empty PriorArtifact", subscan_id)
+        log.info("Stage 4 [%s]: empty inputs; writing empty PriorArtifact", subscan_id)
         return PriorArtifact(subscan_id=subscan_id)
 
     # Step 1: per-(frame, iid) 3D points.
@@ -226,7 +226,7 @@ def run_fusion(
         )
         if n_removed:
             log.info(
-                "Stage 3.5 [%s]: depth inlier filter removed %d points",
+                "Stage 4 [%s]: depth inlier filter removed %d points",
                 subscan_id, n_removed,
             )
 
@@ -244,13 +244,13 @@ def run_fusion(
         )
         if revote_alias:
             log.info(
-                "Stage 3.5 [%s]: voxel revote absorbed %d iid(s): %s",
+                "Stage 4 [%s]: voxel revote absorbed %d iid(s): %s",
                 subscan_id, len(revote_alias), revote_alias,
             )
 
     if not pf_inst_pts:
         log.info(
-            "Stage 3.5 [%s]: no point/mask intersections; writing empty PriorArtifact",
+            "Stage 4 [%s]: no point/mask intersections; writing empty PriorArtifact",
             subscan_id,
         )
         return PriorArtifact(subscan_id=subscan_id)
@@ -275,7 +275,7 @@ def run_fusion(
         n_dropped = sum(len(v) for v in dropped.values())
         if n_dropped:
             log.info(
-                "Stage 3.5 [%s]: outlier filter dropped %d (frame, iid) pairs",
+                "Stage 4 [%s]: outlier filter dropped %d (frame, iid) pairs",
                 subscan_id, n_dropped,
             )
         inst_pts_for_obb = instance_points(pf_inst_pts_clean)
@@ -285,7 +285,7 @@ def run_fusion(
     # Step 2.5: scene-wide intra-side dedup + ID/geometry fusion.
     # Uses proper OBB extents (PCA-aligned edge lengths) as the size gate;
     # axis-aligned extents would conflate orientation with size. Final OBB is
-    # recomputed post-merge in step 6. Outputs `iid_alias` so Stage 4 can
+    # recomputed post-merge in step 6. Outputs `iid_alias` so Stage 5 can
     # rewrite its per-frame mask / score / category maps to canonical iids.
     iid_alias: Dict[int, int] = {iid: iid for iid in inst_pts}
     merges: List = []
@@ -333,7 +333,7 @@ def run_fusion(
                     new_cats[int(canon)] = lbl
             categories = new_cats
         log.info(
-            "Stage 3.5 [%s]: dedup fused %d → %d iids (%d clusters merged)",
+            "Stage 4 [%s]: dedup fused %d → %d iids (%d clusters merged)",
             subscan_id, len(iid_alias), len(inst_pts), len(merges),
         )
 
@@ -406,7 +406,7 @@ def run_fusion(
     n_dyn = sum(1 for v in is_dynamic.values() if v)
     n_unstable = sum(1 for v in is_unstable.values() if v)
     log.info(
-        "Stage 3.5 [%s]: %d instances (%d dyn, %d unstable) across %d frames; "
+        "Stage 4 [%s]: %d instances (%d dyn, %d unstable) across %d frames; "
         "%d scene-graph edges, desc_dim=%d, floor_scale=%s",
         subscan_id, len(instance_ids), n_dyn, n_unstable, len(frame_ids),
         len(edges), 3 + n_bins, "%.3f" % floor_scale if floor_scale is not None else "None",

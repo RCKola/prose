@@ -1,6 +1,6 @@
 """Thin wrapper around the project VLM wrapper's chat-with-images call.
 
-All Stage 4 phases route VLM I/O through this module. The wrapper
+All Stage 5 phases route VLM I/O through this module. The wrapper
 itself (HF / vLLM / OpenAI) is constructed by the pipeline driver and
 passed in — this module does not know about backends.
 """

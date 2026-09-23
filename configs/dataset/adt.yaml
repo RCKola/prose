@@ -12,8 +12,12 @@ root_dir: ${oc.env:ADT_ROOT,${hydra:runtime.cwd}/sample_data/adt}
 sequence_name: Apartment_release_clean_seq133_M1292
 sequence_dir: ${dataset.root_dir}/${dataset.sequence_name}
 
-# Aria's RGB stream is portrait-mounted; preprocessing rotates every rectified
-# PNG / depth NPY / pose 90° CW into `*_rot/` so all stages see upright frames.
+# Aria's RGB stream is portrait-mounted, so all stages expect frames that have
+# been rotated 90° CW into `*_rot/` (rectified PNG, depth NPY, poses, intrinsics).
+# NOTE: `preprocess_adt.py` does NOT produce these — it writes the unrotated
+# `rectified/`, `depth/`, `poses.npy`, `intrinsics.npy`. Supply the rotation
+# pass yourself, or point the four paths below at the unrotated files and set
+# `image_rotation_k` accordingly.
 rectified_dir: ${dataset.sequence_dir}/rectified_rot
 depth_dir:     ${dataset.sequence_dir}/depth_rot
 poses_file:    ${dataset.sequence_dir}/poses_rot.npy

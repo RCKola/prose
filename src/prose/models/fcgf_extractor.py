@@ -1,4 +1,4 @@
-"""FCGF (chrischoy) — learned 32-dim sparse-conv descriptor for Stage 5.
+"""FCGF (chrischoy) — learned 32-dim sparse-conv descriptor for Stage 6.
 
 Drop-in sibling of `_GeoTransformerRunner.run(sp, rp) -> {src, ref, scores}`.
 Pipeline: voxel quantize -> sparse ResUNetBN2C forward -> 32-dim normalized
@@ -7,8 +7,10 @@ feature per point -> mutual NN in feature space -> p2p correspondences.
 `scores` is `cos(src_feat, ref_feat)` ∈ [-1, 1] so the existing `top-K by
 scores` cap keeps the highest-similarity matches.
 
-Loads weights from `cfg_stage5.corr_extractor_checkpoint` (default
+Loads weights from `cfg_registration.corr_extractor_checkpoint` (default
 `weights/fcgf/fcgf_3dmatch.pth`, the chrischoy ResUNetBN2C/3DMatch ckpt).
+
+TODO: port to WarpConvNet (upstream marks the MinkowskiEngine paths legacy).
 """
 from __future__ import annotations
 

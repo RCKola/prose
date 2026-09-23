@@ -1,4 +1,4 @@
-"""FPFH (Open3D) — handcrafted descriptor baseline for Stage 5 corr extraction.
+"""FPFH (Open3D) — handcrafted descriptor baseline for Stage 6 corr extraction.
 
 Drop-in sibling of `_GeoTransformerRunner.run(sp, rp) -> {src, ref, scores}`.
 Pipeline: voxel downsample -> normals -> FPFH (33-dim) -> mutual nearest-

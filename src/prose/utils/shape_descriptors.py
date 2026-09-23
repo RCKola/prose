@@ -1,4 +1,4 @@
-"""Per-instance shape descriptors for the Stage 3.5 prior.
+"""Per-instance shape descriptors for the Stage 4 prior.
 
 Two cheap CPU-only pieces concatenated into one fixed-length vector:
 

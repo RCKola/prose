@@ -1,9 +1,7 @@
-"""CorrespondenceArtifact for the new Stage 4 pipeline.
+"""CorrespondenceArtifact — Stage 5 output consumed by Stage 6 and the metrics.
 
-Mirrors the legacy schema at ``stages.stage4_correspondence.CorrespondenceArtifact``
-so Stage 5 / metrics consumers stay unchanged. Future steps may add a
-typed ``audit`` field; today the legacy ``mosaic: Optional[dict]`` slot
-is kept for binary compatibility.
+The ``mosaic: Optional[dict]`` slot carries free-form audit payloads
+(blocking audit + resolver audit) rather than a typed schema.
 """
 from __future__ import annotations
 

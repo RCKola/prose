@@ -9,6 +9,6 @@ pass recovers matches that never shared a bin, and a two-pass *same?* /
 *different?* double-check verifies each candidate.
 
 The pipeline is composed from small phase objects (filter, prompt, parser,
-resolver, postprocess) driven by ``pipeline.Stage4Pipeline``; the per-bin loop
+resolver, postprocess) driven by ``pipeline.CorrespondencePipeline``; the per-bin loop
 lives in ``visuals.blocking_meta.run_blocking_pipeline``.
 """

@@ -48,19 +48,25 @@ dependencies = [
     # .env loader
     "python-dotenv>=1.0",
 
-    # RANSAC: pygcransac is preferred but optional. When unavailable, the
-    # registration stage falls back to a plain Umeyama (SVD) fit.
-    #     pip install pygcransac
+    # RANSAC backend for the registration stage. Not optional: without it
+    # `_ransac_rigid` silently degrades to a plain Umeyama (SVD) fit, which
+    # drops the RANSAC + geometric-consensus voting the paper reports.
+    # Wheels exist for CPython 3.10-3.12 on manylinux x86_64 and win_amd64;
+    # other platforms build from the sdist.
+    "pygcransac>=0.1.1",
 ]
 
 [project.optional-dependencies]
 dev = ["pytest>=7.0", "ipykernel", "matplotlib>=3.7"]
-# Visualization / FPFH descriptor (Open3D, Python <= 3.12).
+# Open3D. Required for the `fpfh` registration backend; also enables the
+# optional floor-plane scale correction and PLY visualisation.
 viz = ["open3d>=0.18"]
 # Faster object-listing / correspondence VLM inference (Qwen3.6 via vLLM).
-vllm = ["vllm>=0.6"]
-# pygcransac RANSAC backend.
-ransac = ["pygcransac>=0.0.1"]
+# vLLM hard-pins torch/torchvision/torchaudio (every release in this range
+# pins torch==2.11.0), so installing this extra REPLACES whatever torch is
+# already present. Install it in the same pip command as the package rather
+# than after a CUDA-specific torch — see the README Setup section.
+vllm = ["vllm>=0.20.2,<0.24"]
 
 [project.scripts]
 prose = "prose.cli:main"

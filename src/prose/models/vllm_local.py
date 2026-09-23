@@ -1,15 +1,12 @@
 """vLLM-backed Qwen3-VL wrapper.
 
-Drop-in replacement for `QwenVLWrapper` that uses vLLM's offline `LLM` engine
-instead of HuggingFace `generate`. Exposes the same surface
-(`chat_with_images`, `chat_for_pairs`, `chat_yes_no`, `close`) so it can be
-swapped in by selecting `vlm_backend: vllm_local` at the Stage-4 config layer.
+Drop-in replacement for ``QwenVLWrapper`` that uses vLLM's offline ``LLM``
+engine instead of HuggingFace ``generate``.  Exposes the same surface
+(``chat_with_images``, ``chat_for_pairs``, ``chat_yes_no``, ``close``) so it
+can be swapped in by selecting ``vlm_backend: vllm_local`` in the
+correspondence config.
 
-Requires the `prose_vllm.sqsh` container (EDF: `prose_vllm.toml`). The
-default `prose.sqsh` image does NOT include vLLM. Note that the vLLM image
-also does NOT include GeoTransformer — runs using this wrapper must split
-Stage 5 fallback into a second job using the canonical prose image. See
-CLAUDE.md "Optional vLLM image (Stage 4 only)" for the two-job pattern.
+Install vLLM with ``pip install -e ".[vllm]"`` (see README).
 """
 from __future__ import annotations
 

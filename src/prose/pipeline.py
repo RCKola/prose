@@ -183,7 +183,7 @@ class Pipeline:
                         frames = self.dataset.load_rgb_frames(sid)
                         art = run_object_listing(
                             wrapper, subscan_id=sid,
-                            frame_paths=frames.paths, cfg_stage2=cfg.object_listing,
+                            frame_paths=frames.paths, cfg_object_listing=cfg.object_listing,
                         )
                         results[sid]["object_listing"] = art.save(self.dirs["object_listing"])
                 finally:
@@ -213,7 +213,7 @@ class Pipeline:
                         art = run_segmentation(
                             wrapper, subscan_id=sid,
                             frame_paths=frames.paths, text_prompts=prompts,
-                            cfg_stage3=cfg.segmentation,
+                            cfg_segmentation=cfg.segmentation,
                         )
                         results[sid]["segmentation"] = art.save(self.dirs["segmentation"])
                 finally:
@@ -346,7 +346,7 @@ class Pipeline:
         from .stages.correspondence.artifact import CorrespondenceArtifact
         from .stages.correspondence.filters.identity import IdentityFilter
         from .stages.correspondence.parsers.tuple_json import TupleJsonParser
-        from .stages.correspondence.pipeline import Stage4Pipeline
+        from .stages.correspondence.pipeline import CorrespondencePipeline
         from .stages.correspondence.postprocess.double_check import DoubleCheckPostprocessor
         from .stages.correspondence.prompts.bin_crops import (
             BinCropsPrompt, PairwiseBinCropsPrompt,
@@ -465,7 +465,7 @@ class Pipeline:
                 negation_pass=bool(getattr(cfg_c, "dc_negation_pass", True)),
             ))
 
-        pipeline = Stage4Pipeline(
+        pipeline = CorrespondencePipeline(
             filter=IdentityFilter(),
             views=None,
             visuals=[],
@@ -607,7 +607,7 @@ class Pipeline:
             src_masks=_unpack_masks(per_subscan[pair.src_id]["segmentation"]) if corr_path else {},
             ref_masks=_unpack_masks(per_subscan[pair.ref_id]["segmentation"]) if corr_path else {},
             correspondences=corrs,
-            cfg_stage5=self.cfg.registration,
+            cfg_registration=self.cfg.registration,
             correspondence_weights=weights,
         )
 

@@ -8,8 +8,8 @@ json_schema` token-level constraint. We approximate it via:
      json.loads it.
   3. Single retry on parse failure with a stricter "JSON ONLY" wrapper.
 
-Same schemas as `openai_vlm.OpenAIVLMWrapper.chat_for_pairs` / `chat_yes_no`
-so call sites are interchangeable.
+Shared JSON-chat schemas used by the VLM wrappers, so call sites are
+interchangeable across backends.
 """
 from __future__ import annotations
 
@@ -47,7 +47,6 @@ RESPOND WITH ONLY A JSON OBJECT MATCHING THIS EXACT SCHEMA (no markdown, no pros
 # (each with a brief rationale). Namespace is fixed: red_id ∈ [0,99], blue_id
 # ≥ 100. `pairs` is DERIVED from non-null `matches` by the parser — the model
 # does not emit it, which cuts ~20-30% of output tokens on large scenes.
-# See configs/stage4_correspondence/gom.yaml::prompt_som_explicit.
 PAIRS_EXPLICIT_COT_SCHEMA_INSTRUCTION = """\
 
 RESPOND WITH ONLY A JSON OBJECT MATCHING THIS EXACT SCHEMA (no markdown, no prose, no code fences):
@@ -138,7 +137,7 @@ def parse_pairs_json(
     in `parsed["_dropped_invalid_namespace"]`). The parser does not raise on
     these — it lets `_extract_json_object` raise for structural failures
     (the path that already triggers the strict-retry) and falls through to
-    Stage 5 fallback when every pair is dropped.
+    Stage 6 fallback when every pair is dropped.
     """
     blob = _extract_json_object(text)
     parsed = json.loads(blob)
